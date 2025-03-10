@@ -14,9 +14,7 @@ ChatBI是一款强大的智能数据可视化对话工具，它能够将大语�
 - **多种图表类型**：支持柱状图、折线图、饼图等多种可视化方式
 - **流式响应**：实时展示AI思考过程，提升用户体验
 
-![image](D:\Captura\saved files\ChatBI_demo.gif)
-
-<img src="D:\Captura\saved files\ChatBI_demo.gif" height="100%" width="100%" />
+<img src="https://github.com/LXX3123/ChatBI/blob/main/ChatBI_demo.gif" height="100%" width="100%" />
 
 
 
