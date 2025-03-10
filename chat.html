@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatBI</title>
+    <!-- 引入 ECharts 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.2/dist/echarts.min.js"></script>
+    <!-- 引入 marked 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 引入 DOMPurify 库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.11/purify.min.js"></script>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入图标库 -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        .chat-container {
+            height: calc(100vh - 180px);
+            overflow-y: auto;
+        }
+        .message {
+            max-width: 85%;
+            display: flex;
+            margin-bottom: 16px;
+        }
+        .user-message {
+            margin-left: auto;
+            flex-direction: row-reverse;
+        }
+        .assistant-message {
+            margin-right: auto;
+        }
+        .message-content {
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 14px;
+            margin: 0 10px;
+        }
+        .user-message .message-content {
+            background-color: #e3f2fd;
+        }
+        .assistant-message .message-content {
+            background-color: #f5f5f5;
+        }
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            margin: 16px 0;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .action-button {
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .action-button:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        .timestamp {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+        .chart-type-selector {
+            padding: 8px 12px; /* 增加内边距，让下拉框更饱满 */
+            border-radius: 6px; /* 增加圆角 */
+            border: 1px solid #ccc; /* 调整边框颜色 */
+            background-color: #fff; /* 背景颜色 */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 添加阴影 */
+            font-size: 14px; /* 调整字体大小 */
+            cursor: pointer; /* 鼠标指针样式 */
+            appearance: none; /* 去掉默认样式 */
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url('data:image/svg+xml;utf8,<svg fill="%23333" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 8px center; /* 调整箭头位置，让其离文字更远 */
+            background-size: 16px;
+            width: 85px; /* 增加下拉框的宽度 */
+        }
+        .chart-type-selector:hover {
+            border-color: #999; /* 悬停时边框颜色变化 */
+        }
+        .chart-type-selector:focus {
+            outline: none;
+            border-color: #3b82f6; /* 聚焦时边框颜色变化 */
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); /* 聚焦时阴影变化 */
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: white;
+            flex-shrink: 0; /* 防止图标容器缩小 */
+        }
+        .user-avatar {
+            background-color: #4a90e2;
+        }
+        .assistant-avatar {
+            background-color: #42b983;
+        }
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .loading-dots {
+            display: flex;
+        }
+        .loading-dots span {
+            width: 8px;
+            height: 8px;
+            margin: 0 2px;
+            background-color: #888;
+            border-radius: 50%;
+            animation: loading 1.4s infinite ease-in-out both;
+        }
+        .loading-dots span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+        .loading-dots span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+        @keyframes loading {
+            0%, 80%, 100% { 
+                transform: scale(0);
+            } 40% { 
+                transform: scale(1.0);
+            }
+        }
+        /* 美化输入框 */
+        #userInput {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* 添加阴影 */
+            border-radius: 9999px; /* 圆角 */
+            padding-right: 40px; /* 为发送图标留出空间 */
+        }
+        /* 输入框容器 */
+        .input-container {
+            position: relative;
+            width: 80%; /* 占据页面宽度的 4/5 */
+            margin: 0 auto; /* 居中显示 */
+        }
+        /* 美化输入框 */
+        #userInput {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* 添加阴影 */
+            border-radius: 9999px; /* 圆角 */
+            padding: 10px 40px 10px 15px; /* 为发送图标留出空间，同时调整内边距 */
+            width: 100%; /* 宽度占满容器 */
+            box-sizing: border-box; /* 让内边距不影响宽度 */
+            border: 1px solid #ccc; /* 添加边框 */
+        }
+        /* 发送图标 */
+        .send-icon {
+            position: absolute;
+            top: 50%;
+            right: 15px; /* 调整图标位置 */
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #3b82f6; /* 图标颜色 */
+        }
+        /* 发送图标悬停效果 */
+        .send-icon:hover {
+            color: #2563eb;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto p-4">
+        <div class="flex items-center mb-4">
+            <h1 class="text-2xl font-bold">ChatBI</h1>
+            <span id="messageCount" class="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">0条记录</span>
+        </div>
+        
+        <!-- 聊天记录容器 -->
+        <div id="chatContainer" class="chat-container bg-white rounded-lg shadow-lg p-4 mb-4">
+            <!-- 消息将在这里动态添加 -->
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-4">
+            <div class="container mx-auto">
+                <div class="flex justify-center"> <!-- 让输入框居中 -->
+                    <div class="input-container">
+                        <textarea 
+                            id="userInput" 
+                            class="resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            rows="1"
+                            placeholder="请输入您的问题..."
+                        ></textarea>
+                        <i class="ri-send-plane-2-line send-icon" id="sendIcon"></i> <!-- 发送图标 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chatHistory = [];
+        const chatContainer = document.getElementById('chatContainer');
+        const userInput = document.getElementById('userInput');
+        const sendButton = document.getElementById('sendButton');
+        const messageCount = document.getElementById('messageCount');
+        let isLoading = false;
+
+        // 更新消息计数
+        function updateMessageCount() {
+            const count = Math.floor(chatHistory.length / 2); // 每一轮对话包含用户和助手各一条消息
+            messageCount.textContent = `${count}条记录`;
+        }
+
+        // 自动调整输入框高度
+        userInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // 发送消息
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message || isLoading) return;
+
+            isLoading = true;
+            
+            // 添加用户消息到聊天记录
+            addMessageToChat('user', message);
+            
+            // 保存到聊天历史
+            chatHistory.push({
+                role: 'user',
+                content: message
+            });
+            
+            // 更新消息计数
+            updateMessageCount();
+            
+            userInput.value = '';
+            userInput.style.height = 'auto';
+
+            try {
+                // 构建消息历史记录
+                const messages = chatHistory.map(msg => ({
+                    role: msg.role,
+                    content: msg.content
+                }));
+
+                // 创建一个空的助手消息容器，用于流式更新
+                const assistantMessageDiv = createEmptyAssistantMessage();
+                
+                const response = await fetch('http://159.138.252.56:3000/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer fastgpt-wf4e5WE4CfdAhonk66W67vRLqw0kPd7SZNsNvw2p7b4iJHnZNrEpMBBXiGTb',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        "chatId": "my_chatId",
+                        "stream": true,
+                        "detail": false,
+                        "responseChatItemId": "my_responseChatItemId",
+                        "variables": {
+                            "uid": "asdfadsfasfd2323",
+                            "name": "张三"
+                        },
+                        "messages": messages
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                // 处理流式响应
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullContent = '';
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    
+                    // 处理缓冲区中的完整事件
+                    let eventEnd = buffer.indexOf('\n\n');
+                    while (eventEnd !== -1) {
+                        const eventData = buffer.substring(0, eventEnd);
+                        buffer = buffer.substring(eventEnd + 2);
+                        
+                        if (eventData.startsWith('data: ')) {
+                            const jsonData = eventData.substring(6);
+                            if (jsonData === '[DONE]') {
+                                // 流结束
+                                break;
+                            }
+                            
+                            try {
+                                const parsedData = JSON.parse(jsonData);
+                                const chunkContent = parsedData.choices[0].delta.content || '';
+                                fullContent += chunkContent;
+                                
+                                // 更新助手消息的内容
+                                updateAssistantMessageContent(assistantMessageDiv, fullContent);
+                            } catch (e) {
+                                console.error('解析事件数据失败:', e);
+                            }
+                        }
+                        
+                        eventEnd = buffer.indexOf('\n\n');
+                    }
+                }
+                
+                // 流结束后，保存完整内容到聊天历史
+                chatHistory.push({
+                    role: 'assistant',
+                    content: fullContent
+                });
+                
+                // 最终更新，包括渲染图表
+                finalizeAssistantMessage(assistantMessageDiv, fullContent);
+                
+                // 更新消息计数
+                updateMessageCount();
+
+            } catch (error) {
+                console.error('Error:', error);
+                addMessageToChat('assistant', '抱歉，发生了错误，请稍后重试。');
+            } finally {
+                isLoading = false;
+                // 移除所有加载指示器
+                document.querySelectorAll('.loading-indicator').forEach(el => el.remove());
+            }
+        }
+
+        // 创建空的助手消息容器
+        function createEmptyAssistantMessage() {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant-message';
+            
+            const timestamp = new Date().toLocaleString();
+            
+            messageDiv.innerHTML = `
+                <div class="avatar assistant-avatar">
+                    <i class="ri-robot-line"></i>
+                </div>
+                <div class="message-content">
+                    <div class="before-table-text"></div>
+                    <div class="table-content my-4" style="display: none;"></div>
+                    <div class="chart-controls" style="display: none;">
+                        <!-- 去掉 "图标类型：" 标签 -->
+                        <select class="chart-type-selector" id="chartType-${Date.now()}">
+                            <option value="bar">柱状图</option>
+                            <option value="line">折线图</option>
+                            <option value="pie">饼图</option>
+                        </select>
+                    </div>
+                    <div class="chart-container" style="display: none;"></div>
+                    <div class="after-table-text"></div>
+                    <div class="loading-indicator">
+                        <span>ChatBI思考中</span>
+                        <div class="loading-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="action-button copy-btn" title="复制">
+                            <i class="ri-file-copy-line"></i>
+                        </button>
+                        <button class="action-button like-btn" title="点赞">
+                            <i class="ri-heart-line"></i>
+                        </button>
+                    </div>
+                    <div class="timestamp">${timestamp}</div>
+                </div>
+            `;
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            return messageDiv;
+        }
+
+        // 更新助手消息内容（流式更新）
+        function updateAssistantMessageContent(messageDiv, content) {
+            // 解析响应内容
+            const lines = content.split('\n');
+            let tableStartIndex = -1;
+            let tableEndIndex = -1;
+
+            // 找到表格的起始行和结束行
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].includes('|') && lines[i + 1] && lines[i + 1].includes('---')) {
+                    tableStartIndex = i;
+                    break;
+                }
+            }
+
+            if (tableStartIndex !== -1) {
+                for (let i = tableStartIndex + 2; i < lines.length; i++) {
+                    if (!lines[i].includes('|')) {
+                        tableEndIndex = i - 1;
+                        break;
+                    }
+                }
+                if (tableEndIndex === -1) {
+                    tableEndIndex = lines.length - 1;
+                }
+            }
+
+            // 提取表格前的文本
+            const beforeTableText = tableStartIndex !== -1 
+                ? lines.slice(0, tableStartIndex).join('\n') 
+                : content;
+            
+            // 提取表格
+            const tableContent = tableStartIndex !== -1 
+                ? lines.slice(tableStartIndex, tableEndIndex + 1).join('\n') 
+                : '';
+            
+            // 提取表格后的文本
+            const afterTableText = tableStartIndex !== -1 && tableEndIndex < lines.length - 1
+                ? lines.slice(tableEndIndex + 1).join('\n')
+                : '';
+
+            // 更新文本内容
+            const beforeTableTextElement = messageDiv.querySelector('.before-table-text');
+            beforeTableTextElement.innerHTML = DOMPurify.sanitize(marked.parse(beforeTableText));
+            
+            // 更新表格内容（如果有）
+            const tableContentElement = messageDiv.querySelector('.table-content');
+            if (tableContent) {
+                tableContentElement.innerHTML = DOMPurify.sanitize(marked.parse(tableContent));
+                tableContentElement.style.display = 'block';
+            }
+            
+            // 更新表格后文本
+            const afterTableTextElement = messageDiv.querySelector('.after-table-text');
+            afterTableTextElement.innerHTML = DOMPurify.sanitize(marked.parse(afterTableText));
+            
+            // 滚动到底部
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // 最终更新助手消息，包括渲染图表
+        function finalizeAssistantMessage(messageDiv, content) {
+            // 更新一次内容，确保所有文本都已正确显示
+            updateAssistantMessageContent(messageDiv, content);
+            
+            // 移除加载指示器
+            const loadingIndicator = messageDiv.querySelector('.loading-indicator');
+            if (loadingIndicator) {
+                loadingIndicator.remove();
+            }
+            
+            // 解析表格数据并渲染图表
+            const parsedData = parseTableData(content);
+            if (parsedData.length > 0) {
+                const headers = Object.keys(parsedData[0]);
+                const xAxisDataKey = headers[0];
+                const yAxisDataKey = headers[1];
+
+                const xAxisData = parsedData.map(item => item[xAxisDataKey]);
+                const yAxisData = parsedData.map(item => {
+                    let value = item[yAxisDataKey];
+                    if (typeof value === 'string') {
+                        value = value.replace(/,/g, '');
+                    }
+                    return parseInt(value);
+                });
+
+                // 显示图表控件
+                const chartControls = messageDiv.querySelector('.chart-controls');
+                chartControls.style.display = 'flex';
+                
+                const chartContainer = messageDiv.querySelector('.chart-container');
+                chartContainer.style.display = 'block';
+                
+                const chartTypeSelector = messageDiv.querySelector('.chart-type-selector');
+                
+                // 渲染图表
+                renderChartInContainer(chartContainer, xAxisData, yAxisData, xAxisDataKey, yAxisDataKey, 'bar');
+                
+                // 添加图表类型切换事件
+                if (chartTypeSelector) {
+                    chartTypeSelector.addEventListener('change', function() {
+                        renderChartInContainer(chartContainer, xAxisData, yAxisData, xAxisDataKey, yAxisDataKey, this.value);
+                    });
+                }
+            }
+            
+            // 添加复制功能
+            const copyBtn = messageDiv.querySelector('.copy-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(content);
+                    copyBtn.innerHTML = '<i class="ri-check-line"></i>';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '<i class="ri-file-copy-line"></i>';
+                    }, 2000);
+                });
+            }
+
+            // 添加点赞功能
+            const likeBtn = messageDiv.querySelector('.like-btn');
+            if (likeBtn) {
+                likeBtn.addEventListener('click', () => {
+                    likeBtn.innerHTML = '<i class="ri-heart-fill text-red-500"></i>';
+                });
+            }
+        }
+
+        // 添加消息到聊天记录（仅用于用户消息）
+        function addMessageToChat(role, content) {
+            if (role !== 'user') return; // 助手消息现在通过流式处理
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+            
+            const timestamp = new Date().toLocaleString();
+            
+            messageDiv.innerHTML = `
+                <div class="avatar user-avatar">
+                    <i class="ri-user-line"></i>
+                </div>
+                <div class="message-content">
+                    <div class="whitespace-pre-wrap">${content}</div>
+                    <div class="timestamp">${timestamp}</div>
+                </div>
+            `;
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // 发送图标点击事件
+        const sendIcon = document.getElementById('sendIcon');
+        sendIcon.addEventListener('click', sendMessage);
+
+        // 回车发送消息
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // 解析表格数据
+        function parseTableData(content) {
+            const lines = content.split('\n');
+            let tableStartIndex = -1;
+            let tableEndIndex = -1;
+
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].includes('|') && lines[i + 1] && lines[i + 1].includes('---')) {
+                    tableStartIndex = i;
+                    break;
+                }
+            }
+
+            if (tableStartIndex === -1) {
+                return [];
+            }
+
+            for (let i = tableStartIndex + 2; i < lines.length; i++) {
+                if (!lines[i].includes('|')) {
+                    tableEndIndex = i - 1;
+                    break;
+                }
+            }
+            if (tableEndIndex === -1) {
+                tableEndIndex = lines.length - 1;
+            }
+
+            const headerLine = lines[tableStartIndex];
+            const headers = headerLine.split('|').map(header => header.trim()).filter(header => header);
+            let headersToUse = headers;
+            // 判断是否有三列数据
+            if (headers.length === 3) { 
+                headersToUse = headers.slice(1);
+            }
+
+            const data = [];
+            for (let i = tableStartIndex + 2; i <= tableEndIndex; i++) {
+                const rowLine = lines[i];
+                const rowValues = rowLine.split('|').map(value => value.trim()).filter(value => value);
+                let rowValuesToUse = rowValues;
+                // 判断是否有三列数据
+                if (rowValues.length === 3) { 
+                    rowValuesToUse = rowValues.slice(1);
+                }
+
+                const rowData = {};
+                for (let j = 0; j < headersToUse.length; j++) {
+                    rowData[headersToUse[j]] = rowValuesToUse[j];
+                }
+                data.push(rowData);
+            }
+
+            return data;
+        }
+
+        // 渲染图表
+        function renderChartInContainer(container, xAxisData, yAxisData, xAxisDataKey, yAxisDataKey, chartType = 'bar') {
+            // 先清除图表，解决切换到饼图时仍显示坐标轴的问题
+            const myChart = echarts.init(container);
+            myChart.clear();
+            
+            let option;
+            
+            if (chartType === 'bar') {
+                option = {
+                    grid: {
+                        left: '15%'
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: xAxisData,
+                        name: xAxisDataKey,
+                        axisLabel: {
+                            color: '#333',
+                            fontSize: 12
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: yAxisDataKey,
+                        axisLabel: {
+                            color: '#333',
+                            fontSize: 12
+                        }
+                    },
+                    series: [{
+                        data: yAxisData,
+                        type: 'bar',
+                        // 修改柱形图颜色为更鲜艳的蓝色
+                        itemStyle: {
+                            color: '#2196F3' 
+                        },
+                        barWidth: '30%'
+                    }]
+                };
+            } else if (chartType === 'line') {
+                option = {
+                    grid: {
+                        left: '15%'
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: xAxisData,
+                        name: xAxisDataKey,
+                        axisLabel: {
+                            color: '#333',
+                            fontSize: 12
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: yAxisDataKey,
+                        axisLabel: {
+                            color: '#333',
+                            fontSize: 12
+                        }
+                    },
+                    series: [{
+                        data: yAxisData,
+                        type: 'line',
+                        // 修改折线图线条颜色为绿色
+                        lineStyle: {
+                            color: '#4CAF50', 
+                            width: 2
+                        },
+                        // 修改折线图数据点颜色为绿色
+                        itemStyle: {
+                            color: '#4CAF50' 
+                        },
+                        symbol: 'circle',
+                        symbolSize: 8,
+                        smooth: true
+                    }]
+                };
+            } else if (chartType === 'pie') {
+                const pieData = xAxisData.map((item, index) => ({
+                    value: yAxisData[index],
+                    name: item
+                }));
+                option = {
+                    series: [{
+                        type: 'pie',
+                        data: pieData,
+                        radius: ['40%', '70%'],
+                        center: ['55%', '50%'],
+                        label: {
+                            formatter: '{b}: {c} ({d}%)',
+                            color: '#333',
+                            fontSize: 12
+                        },
+                        itemStyle: {
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        emphasis: {
+                            itemStyle: {
+                                shadowBlur: 10,
+                                shadowOffsetX: 0,
+                                shadowColor: 'rgba(0, 0, 0, 0.5)'
+                            }
+                        }
+                    }]
+                };
+            }
+
+            myChart.setOption(option);
+
+            // 监听窗口大小变化，调整图表大小
+            window.addEventListener('resize', () => {
+                myChart.resize();
+            });
+        }
+
+        // 初始化消息计数
+        updateMessageCount();
+    </script>
+</body>
+</html> 
