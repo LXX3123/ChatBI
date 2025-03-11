@@ -267,11 +267,17 @@
             userInput.style.height = 'auto';
 
             try {
-                // 构建消息历史记录
-                const messages = chatHistory.map(msg => ({
-                    role: msg.role,
-                    content: msg.content
-                }));
+                // 构建消息历史记录，添加 system 消息
+                const messages = [
+                    {
+                        role: 'system',
+                        content: ''
+                    },
+                    ...chatHistory.map(msg => ({
+                        role: msg.role,
+                        content: msg.content
+                    }))
+                ];
 
                 // 创建一个空的助手消息容器，用于流式更新
                 const assistantMessageDiv = createEmptyAssistantMessage();
@@ -283,12 +289,12 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        "chatId": "my_chatId",
+                        "chatId": "my_chat5",
                         "stream": true,
                         "detail": false,
-                        "responseChatItemId": "my_responseChatItemId",
+                        "responseChatItemId": "my_responseChatItemId55",
                         "variables": {
-                            "uid": "asdfadsfasfd2323",
+                            "uid": "asdfadsfa5",
                             "name": "张三"
                         },
                         "messages": messages
@@ -346,7 +352,7 @@
                     content: fullContent
                 });
                 
-                // 最终更新，包括渲染图表
+                // 最终更新助手消息，包括渲染图表
                 finalizeAssistantMessage(assistantMessageDiv, fullContent);
                 
                 // 更新消息计数
@@ -477,46 +483,139 @@
         function finalizeAssistantMessage(messageDiv, content) {
             // 更新一次内容，确保所有文本都已正确显示
             updateAssistantMessageContent(messageDiv, content);
-            
+
             // 移除加载指示器
             const loadingIndicator = messageDiv.querySelector('.loading-indicator');
             if (loadingIndicator) {
                 loadingIndicator.remove();
             }
-            
-            // 解析表格数据并渲染图表
+
+            // 解析表格数据
             const parsedData = parseTableData(content);
             if (parsedData.length > 0) {
                 const headers = Object.keys(parsedData[0]);
-                const xAxisDataKey = headers[0];
-                const yAxisDataKey = headers[1];
-
-                const xAxisData = parsedData.map(item => item[xAxisDataKey]);
-                const yAxisData = parsedData.map(item => {
-                    let value = item[yAxisDataKey];
-                    if (typeof value === 'string') {
-                        value = value.replace(/,/g, '');
-                    }
-                    return parseInt(value);
-                });
-
-                // 显示图表控件
                 const chartControls = messageDiv.querySelector('.chart-controls');
-                chartControls.style.display = 'flex';
-                
                 const chartContainer = messageDiv.querySelector('.chart-container');
-                chartContainer.style.display = 'block';
-                
                 const chartTypeSelector = messageDiv.querySelector('.chart-type-selector');
-                
-                // 渲染图表
-                renderChartInContainer(chartContainer, xAxisData, yAxisData, xAxisDataKey, yAxisDataKey, 'bar');
-                
-                // 添加图表类型切换事件
-                if (chartTypeSelector) {
-                    chartTypeSelector.addEventListener('change', function() {
-                        renderChartInContainer(chartContainer, xAxisData, yAxisData, xAxisDataKey, yAxisDataKey, this.value);
+        
+                // 显示图表控件
+                chartControls.style.display = 'flex';
+                chartContainer.style.display = 'block';
+        
+                // 计算选项最大宽度的函数
+                function getMaxOptionWidth(selectElement) {
+                    const tempDiv = document.createElement('div');
+                    tempDiv.style.visibility = 'hidden';
+                    tempDiv.style.position = 'absolute';
+                    tempDiv.style.whiteSpace = 'nowrap';
+                    document.body.appendChild(tempDiv);
+        
+                    let maxWidth = 0;
+                    for (let i = 0; i < selectElement.options.length; i++) {
+                        tempDiv.textContent = selectElement.options[i].textContent;
+                        const width = tempDiv.offsetWidth;
+                        if (width > maxWidth) {
+                            maxWidth = width;
+                        }
+                    }
+        
+                    document.body.removeChild(tempDiv);
+                    return maxWidth;
+                }
+        
+                // 如果表格有多列，添加横轴和纵轴选择下拉框
+                if (headers.length > 2) {
+                    const xAxisSelector = document.createElement('select');
+                    xAxisSelector.className = 'chart-type-selector';
+                    // 添加提示选项
+                    const xAxisPromptOption = document.createElement('option');
+                    xAxisPromptOption.value = '';
+                    xAxisPromptOption.textContent = '请选择';
+                    xAxisSelector.appendChild(xAxisPromptOption);
+                    headers.forEach(header => {
+                        const option = document.createElement('option');
+                        option.value = header;
+                        option.textContent = header;
+                        xAxisSelector.appendChild(option);
                     });
+                    const xAxisLabel = document.createElement('span');
+                    xAxisLabel.textContent = '横轴：';
+                    chartControls.appendChild(xAxisLabel);
+                    chartControls.appendChild(xAxisSelector);
+        
+                    const yAxisSelector = document.createElement('select');
+                    yAxisSelector.className = 'chart-type-selector';
+                    // 添加提示选项
+                    const yAxisPromptOption = document.createElement('option');
+                    yAxisPromptOption.value = '';
+                    yAxisPromptOption.textContent = '请选择';
+                    yAxisSelector.appendChild(yAxisPromptOption);
+                    headers.forEach(header => {
+                        const option = document.createElement('option');
+                        option.value = header;
+                        option.textContent = header;
+                        yAxisSelector.appendChild(option);
+                    });
+                    const yAxisLabel = document.createElement('span');
+                    yAxisLabel.textContent = '纵轴：';
+                    chartControls.appendChild(yAxisLabel);
+                    chartControls.appendChild(yAxisSelector);
+        
+                    // 设置下拉框宽度为选项最大宽度
+                    const xAxisMaxWidth = getMaxOptionWidth(xAxisSelector);
+                    const yAxisMaxWidth = getMaxOptionWidth(yAxisSelector);
+                    xAxisSelector.style.width = `${xAxisMaxWidth + 20}px`; // 加 20px 作为内边距和箭头空间
+                    yAxisSelector.style.width = `${yAxisMaxWidth + 20}px`; 
+        
+                    // 当用户选择图表类型或横轴、纵轴时，重新渲染图表
+                    const renderChart = () => {
+                        const xAxisDataKey = xAxisSelector.value;
+                        const yAxisDataKey = yAxisSelector.value;
+                        const xAxisData = parsedData.map(item => item[xAxisDataKey]);
+                        const yAxisData = parsedData.map(item => {
+                            let value = item[yAxisDataKey];
+                            if (typeof value === 'string') {
+                                if (/^\d+$/.test(value)) {
+                                    // 纯数字，不做处理
+                                    return parseInt(value);
+                                } else if (/^[^\d]+$/.test(value)) {
+                                    // 纯文字，不做处理
+                                    return value;
+                                } else {
+                                    // 文字和数字混合，去掉非数字字符
+                                    value = value.replace(/[^0-9.]/g, '');
+                                    return parseInt(value);
+                                }
+                            }
+                            return value;
+                        });
+                        renderChartInContainer(chartContainer, xAxisData, yAxisData, xAxisDataKey, yAxisDataKey, chartTypeSelector.value);
+                    };
+        
+                    chartTypeSelector.addEventListener('change', renderChart);
+                    xAxisSelector.addEventListener('change', renderChart);
+                    yAxisSelector.addEventListener('change', renderChart);
+                } else {
+                    const xAxisDataKey = headers[0];
+                    const yAxisDataKey = headers[1];
+                    const xAxisData = parsedData.map(item => item[xAxisDataKey]);
+                    const yAxisData = parsedData.map(item => {
+                        let value = item[yAxisDataKey];
+                        if (typeof value === 'string') {
+                            value = value.replace(/,/g, '');
+                        }
+                        return parseInt(value);
+                    });
+        
+                    // 渲染图表
+                    renderChartInContainer(chartContainer, xAxisData, yAxisData, xAxisDataKey, yAxisDataKey, 'bar');
+        
+                    // 添加图表类型切换事件
+                    if (chartTypeSelector) {
+                        chartTypeSelector.addEventListener('change', function() {
+                            renderChartInContainer(chartContainer, xAxisData, yAxisData, xAxisDataKey, yAxisDataKey, this.value);
+                        });
+                    }
                 }
             }
             
@@ -578,6 +677,7 @@
 
         // 解析表格数据
         function parseTableData(content) {
+            console.log('开始解析表格数据，输入内容：', content);
             const lines = content.split('\n');
             let tableStartIndex = -1;
             let tableEndIndex = -1;
@@ -585,54 +685,71 @@
             for (let i = 0; i < lines.length; i++) {
                 if (lines[i].includes('|') && lines[i + 1] && lines[i + 1].includes('---')) {
                     tableStartIndex = i;
+                    console.log(`找到表格起始行，索引为：${tableStartIndex}`);
                     break;
                 }
             }
 
             if (tableStartIndex === -1) {
+                console.log('未找到表格起始行，返回空数组');
                 return [];
             }
 
             for (let i = tableStartIndex + 2; i < lines.length; i++) {
                 if (!lines[i].includes('|')) {
                     tableEndIndex = i - 1;
+                    console.log(`找到表格结束行，索引为：${tableEndIndex}`);
                     break;
                 }
             }
             if (tableEndIndex === -1) {
                 tableEndIndex = lines.length - 1;
+                console.log(`未找到表格结束行，将最后一行作为结束行，索引为：${tableEndIndex}`);
             }
 
             const headerLine = lines[tableStartIndex];
             const headers = headerLine.split('|').map(header => header.trim()).filter(header => header);
-            let headersToUse = headers;
-            // 判断是否有三列数据
-            if (headers.length === 3) { 
-                headersToUse = headers.slice(1);
-            }
+            console.log('表格表头：', headers);
 
             const data = [];
             for (let i = tableStartIndex + 2; i <= tableEndIndex; i++) {
                 const rowLine = lines[i];
                 const rowValues = rowLine.split('|').map(value => value.trim()).filter(value => value);
-                let rowValuesToUse = rowValues;
-                // 判断是否有三列数据
-                if (rowValues.length === 3) { 
-                    rowValuesToUse = rowValues.slice(1);
-                }
+                console.log(`解析第 ${i} 行数据：`, rowValues);
 
                 const rowData = {};
-                for (let j = 0; j < headersToUse.length; j++) {
-                    rowData[headersToUse[j]] = rowValuesToUse[j];
+                for (let j = 0; j < headers.length; j++) {
+                    // 处理包含逗号的数字
+                    if (/^\d{1,3}(,\d{3})*(\.\d+)?$/.test(rowValues[j])) {
+                        rowData[headers[j]] = parseFloat(rowValues[j].replace(/,/g, ''));
+                    } else {
+                        rowData[headers[j]] = rowValues[j];
+                    }
                 }
                 data.push(rowData);
             }
 
+            console.log('解析后的表格数据：', data);
             return data;
         }
 
         // 渲染图表
         function renderChartInContainer(container, xAxisData, yAxisData, xAxisDataKey, yAxisDataKey, chartType = 'bar') {
+            // 清除之前的提示信息
+            const existingHint = container.querySelector('.chart-hint');
+            if (existingHint) {
+                existingHint.remove();
+            }
+
+            if (!xAxisData || !yAxisData || xAxisData.length === 0 || yAxisData.length === 0) {
+                // 如果没有有效的横轴和纵轴数据，显示提示信息
+                const hint = document.createElement('div');
+                hint.className = 'chart-hint text-center text-gray-500 mt-4';
+                hint.textContent = '请选择横轴及纵轴';
+                container.appendChild(hint);
+                return;
+            }
+
             // 先清除图表，解决切换到饼图时仍显示坐标轴的问题
             const myChart = echarts.init(container);
             myChart.clear();
